@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { LogEntry, ServerMessage, ClientMessage, CLIConfig } from '@docker-log-viewer/shared';
-import { RingBuffer } from './ring-buffer.js';
+import { LogDatabase, QueryOptions } from './database.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,47 +23,32 @@ const MIME_TYPES: Record<string, string> = {
 export class LogServer {
   private httpServer: http.Server;
   private wss: WebSocketServer;
-  private buffer: RingBuffer;
+  private db: LogDatabase;
   private services: Set<string> = new Set();
   private clients: Set<WebSocket> = new Set();
   private config: CLIConfig;
   private publicDir: string;
-  private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(config: CLIConfig) {
     this.config = config;
-    this.buffer = new RingBuffer(config.bufferSize);
+    this.db = new LogDatabase(config.retentionMinutes);
     this.publicDir = path.join(__dirname, 'public');
 
     this.httpServer = http.createServer(this.handleHttpRequest.bind(this));
     this.wss = new WebSocketServer({ server: this.httpServer });
 
     this.wss.on('connection', this.handleConnection.bind(this));
-
-    // Start retention cleanup if configured
-    if (config.retentionMinutes > 0) {
-      this.startRetentionCleanup();
-    }
-  }
-
-  private startRetentionCleanup(): void {
-    // Run cleanup every minute
-    this.cleanupInterval = setInterval(() => {
-      const cutoff = new Date(Date.now() - this.config.retentionMinutes * 60 * 1000);
-      const removed = this.buffer.removeOlderThan(cutoff);
-      if (removed > 0) {
-        console.log(`\x1b[33m[docker-log-viewer]\x1b[0m Removed ${removed} logs older than ${this.config.retentionMinutes} minutes`);
-        // Notify clients to refresh their view
-        this.broadcast({ type: 'init', logs: this.buffer.toArray(), services: Array.from(this.services) });
-      }
-    }, 60000); // Check every minute
   }
 
   private handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
-    let urlPath = req.url || '/';
+    const url = new URL(req.url || '/', `http://${req.headers.host}`);
+    let urlPath = url.pathname;
 
-    // Remove query string
-    urlPath = urlPath.split('?')[0];
+    // API endpoints
+    if (urlPath.startsWith('/api/')) {
+      this.handleApiRequest(req, res, url);
+      return;
+    }
 
     // Default to index.html
     if (urlPath === '/') {
@@ -84,7 +69,6 @@ export class LogServer {
     fs.readFile(filePath, (err, data) => {
       if (err) {
         if (err.code === 'ENOENT') {
-          // For SPA routing, serve index.html for non-file routes
           if (!ext) {
             fs.readFile(path.join(this.publicDir, 'index.html'), (err2, indexData) => {
               if (err2) {
@@ -111,13 +95,88 @@ export class LogServer {
     });
   }
 
+  private handleApiRequest(req: http.IncomingMessage, res: http.ServerResponse, url: URL): void {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    if (req.method === 'OPTIONS') {
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    const endpoint = url.pathname.replace('/api/', '');
+
+    switch (endpoint) {
+      case 'query':
+        this.handleQuery(url, res);
+        break;
+      case 'stats':
+        this.handleStats(res);
+        break;
+      case 'services':
+        this.handleServices(res);
+        break;
+      default:
+        res.writeHead(404);
+        res.end(JSON.stringify({ error: 'Not found' }));
+    }
+  }
+
+  private handleQuery(url: URL, res: http.ServerResponse): void {
+    const params = url.searchParams;
+    const options: QueryOptions = {
+      search: params.get('search') || undefined,
+      services: params.get('services')?.split(',').filter(Boolean) || undefined,
+      levels: params.get('levels')?.split(',').filter(Boolean) as any || undefined,
+      startTime: params.get('startTime') ? new Date(params.get('startTime')!) : undefined,
+      endTime: params.get('endTime') ? new Date(params.get('endTime')!) : undefined,
+      limit: params.get('limit') ? parseInt(params.get('limit')!, 10) : 100,
+      offset: params.get('offset') ? parseInt(params.get('offset')!, 10) : 0,
+    };
+
+    try {
+      const result = this.db.query(options);
+      res.writeHead(200);
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: 'Query failed' }));
+    }
+  }
+
+  private handleStats(res: http.ServerResponse): void {
+    try {
+      const stats = this.db.getStats();
+      res.writeHead(200);
+      res.end(JSON.stringify(stats));
+    } catch (error) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: 'Stats failed' }));
+    }
+  }
+
+  private handleServices(res: http.ServerResponse): void {
+    try {
+      const services = this.db.getServices();
+      res.writeHead(200);
+      res.end(JSON.stringify({ services }));
+    } catch (error) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: 'Services failed' }));
+    }
+  }
+
   private handleConnection(ws: WebSocket): void {
     this.clients.add(ws);
 
-    // Send initial state
+    // Send initial state with recent logs from database
+    const logs = this.db.getRecentLogs(500);
     const initMessage: ServerMessage = {
       type: 'init',
-      logs: this.buffer.toArray(),
+      logs,
       services: Array.from(this.services),
     };
     ws.send(JSON.stringify(initMessage));
@@ -146,7 +205,7 @@ export class LogServer {
         ws.send(JSON.stringify({ type: 'pong' } as ServerMessage));
         break;
       case 'clear':
-        this.buffer.clear();
+        this.db.clear();
         this.broadcast({ type: 'clear' });
         break;
     }
@@ -162,7 +221,8 @@ export class LogServer {
   }
 
   addLog(entry: LogEntry): void {
-    this.buffer.push(entry);
+    // Store in database
+    this.db.addLog(entry);
 
     // Track new services
     if (!this.services.has(entry.service)) {
@@ -170,6 +230,7 @@ export class LogServer {
       this.broadcast({ type: 'service-discovered', service: entry.service });
     }
 
+    // Broadcast to connected clients
     this.broadcast({ type: 'log', entry });
   }
 
@@ -183,14 +244,11 @@ export class LogServer {
 
   stop(): Promise<void> {
     return new Promise((resolve) => {
-      if (this.cleanupInterval) {
-        clearInterval(this.cleanupInterval);
-        this.cleanupInterval = null;
-      }
       for (const client of this.clients) {
         client.close();
       }
       this.wss.close();
+      this.db.close();
       this.httpServer.close(() => resolve());
     });
   }

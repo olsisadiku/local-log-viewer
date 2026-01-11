@@ -5,7 +5,7 @@ import { parseLine } from './parser.js';
 import { LogServer } from './server.js';
 
 export { parseLine, parseLines } from './parser.js';
-export { RingBuffer } from './ring-buffer.js';
+export { LogDatabase } from './database.js';
 export { LogServer } from './server.js';
 
 export async function startLogViewer(config: Partial<CLIConfig> = {}): Promise<void> {
