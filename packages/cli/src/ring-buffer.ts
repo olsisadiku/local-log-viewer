@@ -50,6 +50,31 @@ export class RingBuffer {
     this.buffer = new Array(this.capacity);
   }
 
+  // Remove entries older than the given date
+  removeOlderThan(cutoff: Date): number {
+    if (this.count === 0) return 0;
+
+    let removed = 0;
+    const cutoffTime = cutoff.getTime();
+
+    // Remove from head (oldest) while entries are older than cutoff
+    while (this.count > 0) {
+      const entry = this.buffer[this.head];
+      const entryTime = entry.timestamp?.getTime() ?? Date.now();
+
+      if (entryTime >= cutoffTime) {
+        break; // Entry is newer than cutoff, stop removing
+      }
+
+      // Remove this entry
+      this.head = (this.head + 1) % this.capacity;
+      this.count--;
+      removed++;
+    }
+
+    return removed;
+  }
+
   get size(): number {
     return this.count;
   }

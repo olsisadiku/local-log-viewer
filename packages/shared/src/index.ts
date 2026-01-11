@@ -40,6 +40,7 @@ export interface CLIConfig {
   bufferSize: number;
   open: boolean;
   host: string;
+  retentionMinutes: number; // 0 = no retention limit
 }
 
 export const DEFAULT_CONFIG: CLIConfig = {
@@ -47,4 +48,5 @@ export const DEFAULT_CONFIG: CLIConfig = {
   bufferSize: 10000,
   open: false,
   host: 'localhost',
+  retentionMinutes: 30, // Default: keep logs for 30 minutes
 };

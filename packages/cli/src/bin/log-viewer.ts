@@ -13,12 +13,13 @@ function printHelp(): void {
   docker compose up | dlv [options]
 
 \x1b[1mOPTIONS:\x1b[0m
-  -p, --port <number>     Port for web UI (default: ${DEFAULT_CONFIG.port})
-  -b, --buffer <number>   Max logs in memory (default: ${DEFAULT_CONFIG.bufferSize})
-  -o, --open              Open browser automatically
-  -H, --host <string>     Host to bind to (default: ${DEFAULT_CONFIG.host})
-  -h, --help              Show this help message
-  -v, --version           Show version
+  -p, --port <number>       Port for web UI (default: ${DEFAULT_CONFIG.port})
+  -b, --buffer <number>     Max logs in memory (default: ${DEFAULT_CONFIG.bufferSize})
+  -r, --retention <number>  Minutes to keep logs (default: ${DEFAULT_CONFIG.retentionMinutes}, 0 = forever)
+  -o, --open                Open browser automatically
+  -H, --host <string>       Host to bind to (default: ${DEFAULT_CONFIG.host})
+  -h, --help                Show this help message
+  -v, --version             Show version
 
 \x1b[1mEXAMPLES:\x1b[0m
   docker compose up | dlv
@@ -73,6 +74,15 @@ function parseArgs(args: string[]): Partial<CLIConfig> & { help?: boolean; versi
       case '--host':
         i++;
         config.host = args[i];
+        break;
+      case '-r':
+      case '--retention':
+        i++;
+        config.retentionMinutes = parseInt(args[i], 10);
+        if (isNaN(config.retentionMinutes)) {
+          console.error('Error: Invalid retention value');
+          process.exit(1);
+        }
         break;
       default:
         if (arg.startsWith('-')) {

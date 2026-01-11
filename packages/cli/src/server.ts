@@ -29,6 +29,7 @@ export class LogServer {
   private clients: Set<WebSocket> = new Set();
   private config: CLIConfig;
   private publicDir: string;
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(config: CLIConfig) {
     this.config = config;
@@ -39,6 +40,24 @@ export class LogServer {
     this.wss = new WebSocketServer({ server: this.httpServer });
 
     this.wss.on('connection', this.handleConnection.bind(this));
+
+    // Start retention cleanup if configured
+    if (config.retentionMinutes > 0) {
+      this.startRetentionCleanup();
+    }
+  }
+
+  private startRetentionCleanup(): void {
+    // Run cleanup every minute
+    this.cleanupInterval = setInterval(() => {
+      const cutoff = new Date(Date.now() - this.config.retentionMinutes * 60 * 1000);
+      const removed = this.buffer.removeOlderThan(cutoff);
+      if (removed > 0) {
+        console.log(`\x1b[33m[docker-log-viewer]\x1b[0m Removed ${removed} logs older than ${this.config.retentionMinutes} minutes`);
+        // Notify clients to refresh their view
+        this.broadcast({ type: 'init', logs: this.buffer.toArray(), services: Array.from(this.services) });
+      }
+    }, 60000); // Check every minute
   }
 
   private handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
@@ -212,6 +231,10 @@ export class LogServer {
 
   stop(): Promise<void> {
     return new Promise((resolve) => {
+      if (this.cleanupInterval) {
+        clearInterval(this.cleanupInterval);
+        this.cleanupInterval = null;
+      }
       for (const client of this.clients) {
         client.close();
       }
