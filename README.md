@@ -98,8 +98,8 @@ The web UI:
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/docker-log-viewer.git
-cd docker-log-viewer
+git clone https://github.com/olsisadiku/local-log-viewer.git
+cd local-log-viewer
 
 # Install dependencies
 pnpm install
