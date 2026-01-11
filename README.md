@@ -29,7 +29,7 @@ docker compose up | dlv
 
 ## Usage
 
-Pipe your Docker Compose output to the log viewer:
+### Option 1: Pipe directly (same terminal)
 
 ```bash
 # Basic usage
@@ -43,6 +43,36 @@ docker compose up 2>&1 | dlv --port 3000 --open
 
 # Follow existing logs
 docker compose logs -f | dlv
+```
+
+### Option 2: Send logs from anywhere (HTTP API)
+
+First, start the log viewer server:
+```bash
+dlv --open
+# or: node packages/cli/dist/bin/log-viewer.js --open
+```
+
+Then, from **any directory**, pipe logs via curl:
+```bash
+# Stream logs to the viewer
+docker compose up 2>&1 | while read line; do
+  curl -s -X POST -d "$line" http://localhost:4000/api/ingest > /dev/null
+done
+
+# Or send a batch of logs
+docker compose logs | curl -X POST --data-binary @- http://localhost:4000/api/ingest
+```
+
+### Shell alias (recommended)
+
+Add this to your `~/.bashrc` or `~/.zshrc`:
+```bash
+# Send logs to local log viewer
+alias dlv-send='while read line; do curl -s -X POST -d "$line" http://localhost:4000/api/ingest > /dev/null; done'
+
+# Usage from any directory:
+# docker compose up 2>&1 | dlv-send
 ```
 
 Then open http://localhost:4000 in your browser.
