@@ -10,6 +10,10 @@ interface LogState {
   selectedLevels: Set<LogLevel>;
   searchQuery: string;
 
+  // Pagination
+  pageSize: number;
+  currentPage: number;
+
   // UI state
   isConnected: boolean;
   autoScroll: boolean;
@@ -30,8 +34,16 @@ interface LogState {
   setConnected: (connected: boolean) => void;
   setAutoScroll: (autoScroll: boolean) => void;
 
+  // Pagination actions
+  setPageSize: (size: number) => void;
+  setCurrentPage: (page: number) => void;
+  nextPage: () => void;
+  prevPage: () => void;
+  goToLastPage: () => void;
+
   // Computed
   getFilteredLogs: () => LogEntry[];
+  getPaginatedLogs: () => { logs: LogEntry[]; totalPages: number; totalLogs: number };
 }
 
 export const useLogStore = create<LogState>((set, get) => ({
@@ -41,6 +53,9 @@ export const useLogStore = create<LogState>((set, get) => ({
   selectedServices: new Set<string>(),
   selectedLevels: new Set<LogLevel>(),
   searchQuery: '',
+
+  pageSize: 100,
+  currentPage: 1,
 
   isConnected: false,
   autoScroll: true,
@@ -121,6 +136,31 @@ export const useLogStore = create<LogState>((set, get) => ({
 
   setAutoScroll: (autoScroll) => set({ autoScroll }),
 
+  setPageSize: (size) => set({ pageSize: size, currentPage: 1 }),
+
+  setCurrentPage: (page) => set({ currentPage: page }),
+
+  nextPage: () => {
+    const { currentPage, getPaginatedLogs } = get();
+    const { totalPages } = getPaginatedLogs();
+    if (currentPage < totalPages) {
+      set({ currentPage: currentPage + 1 });
+    }
+  },
+
+  prevPage: () => {
+    const { currentPage } = get();
+    if (currentPage > 1) {
+      set({ currentPage: currentPage - 1 });
+    }
+  },
+
+  goToLastPage: () => {
+    const { getPaginatedLogs } = get();
+    const { totalPages } = getPaginatedLogs();
+    set({ currentPage: totalPages });
+  },
+
   getFilteredLogs: () => {
     const { logs, selectedServices, selectedLevels, searchQuery } = get();
 
@@ -148,5 +188,17 @@ export const useLogStore = create<LogState>((set, get) => ({
 
       return true;
     });
+  },
+
+  getPaginatedLogs: () => {
+    const { getFilteredLogs, pageSize, currentPage } = get();
+    const filtered = getFilteredLogs();
+    const totalLogs = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(totalLogs / pageSize));
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    const logs = filtered.slice(start, end);
+
+    return { logs, totalPages, totalLogs };
   },
 }));
