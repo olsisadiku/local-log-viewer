@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --log-debug: #6b7280;
+  --log-info: #3b82f6;
+  --log-warn: #f59e0b;
+  --log-error: #ef4444;
+  --log-fatal: #dc2626;
+  --log-trace: #8b5cf6;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #374151 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #374151;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #4b5563;
+}
+
+.log-row {
+  @apply font-mono text-sm leading-6;
+}
+
+.log-row:hover {
+  @apply bg-gray-800/50;
+}
+
+.log-level-badge {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium;
+}
+
+.log-level-debug {
+  @apply bg-gray-700 text-gray-300;
+}
+
+.log-level-info {
+  @apply bg-blue-900/50 text-blue-400;
+}
+
+.log-level-warn {
+  @apply bg-amber-900/50 text-amber-400;
+}
+
+.log-level-error {
+  @apply bg-red-900/50 text-red-400;
+}
+
+.log-level-fatal {
+  @apply bg-red-800/50 text-red-300;
+}
+
+.log-level-trace {
+  @apply bg-violet-900/50 text-violet-400;
+}
+
+.service-badge {
+  @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300;
+}
+
+.highlight {
+  @apply bg-yellow-500/30 text-yellow-200;
+}

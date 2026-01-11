@@ -1,0 +1,29 @@
+{
+  "name": "@docker-log-viewer/cli",
+  "version": "0.1.0",
+  "description": "CLI tool for docker-log-viewer",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "docker-log-viewer": "./dist/bin/log-viewer.js",
+    "dlv": "./dist/bin/log-viewer.js"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && pnpm build:web",
+    "build:web": "cp -r ../web/dist ./dist/public 2>/dev/null || echo 'Web not built yet'",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@docker-log-viewer/shared": "workspace:*",
+    "ws": "^8.16.0",
+    "open": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.3.0",
+    "tsx": "^4.7.0"
+  }
+}
