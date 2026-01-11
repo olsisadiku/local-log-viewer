@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { LogEntry, ServerMessage, ClientMessage, CLIConfig } from '@docker-log-viewer/shared';
 import { RingBuffer } from './ring-buffer.js';
-import { parseLine } from './parser.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -66,25 +65,6 @@ export class LogServer {
     // Remove query string
     urlPath = urlPath.split('?')[0];
 
-    // Handle API endpoints
-    if (urlPath === '/api/ingest' && req.method === 'POST') {
-      this.handleIngest(req, res);
-      return;
-    }
-
-    // CORS headers for API
-    if (urlPath.startsWith('/api/')) {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-      if (req.method === 'OPTIONS') {
-        res.writeHead(204);
-        res.end();
-        return;
-      }
-    }
-
     // Default to index.html
     if (urlPath === '/') {
       urlPath = '/index.html';
@@ -128,34 +108,6 @@ export class LogServer {
 
       res.writeHead(200, { 'Content-Type': contentType });
       res.end(data);
-    });
-  }
-
-  private handleIngest(req: http.IncomingMessage, res: http.ServerResponse): void {
-    let body = '';
-
-    req.on('data', (chunk) => {
-      body += chunk.toString();
-    });
-
-    req.on('end', () => {
-      const lines = body.split('\n').filter(line => line.trim().length > 0);
-      let count = 0;
-
-      for (const line of lines) {
-        const entry = parseLine(line);
-        this.addLog(entry);
-        count++;
-      }
-
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, count }));
-    });
-
-    req.on('error', () => {
-      res.writeHead(500);
-      res.end(JSON.stringify({ success: false, error: 'Failed to read body' }));
     });
   }
 
